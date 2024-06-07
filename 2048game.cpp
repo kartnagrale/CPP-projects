@@ -172,6 +172,7 @@ int main(){
             ended=myGame.right();
         }else{
             cout<<"INVALID\n";
+            continue;
         }
         if(myGame.won==true){
             cout<<"Congratulations! You Won The Game\n";
