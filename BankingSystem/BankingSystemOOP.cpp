@@ -3,6 +3,8 @@
 #include <string>
 #include <iomanip>
 #include <memory>
+#include <fstream>
+
 using namespace std;
 
 // Abstract Base Class for BankAccount
@@ -46,6 +48,10 @@ public:
         cout << "Account Holder: " << accountHolderName << endl;
         cout << "Balance: $" << fixed << setprecision(2) << balance << endl;
     }
+
+    virtual string getAccountType() const = 0;
+
+    virtual void save(ofstream &outFile) const = 0;
 };
 
 // Derived Class for SavingsAccount
@@ -70,6 +76,14 @@ public:
         BankAccount::displayAccountDetails();
         cout << "Account Type: Savings" << endl;
         cout << "Interest Rate: " << interestRate << "%" << endl;
+    }
+
+    string getAccountType() const override {
+        return "Savings";
+    }
+
+    void save(ofstream &outFile) const override {
+        outFile << "Savings " << accountNumber << " " << accountHolderName << " " << balance << " " << interestRate << endl;
     }
 };
 
@@ -96,31 +110,82 @@ public:
         cout << "Account Type: Current" << endl;
         cout << "Overdraft Limit: $" << fixed << setprecision(2) << overdraftLimit << endl;
     }
+
+    string getAccountType() const override {
+        return "Current";
+    }
+
+    void save(ofstream &outFile) const override {
+        outFile << "Current " << accountNumber << " " << accountHolderName << " " << balance << " " << overdraftLimit << endl;
+    }
 };
 
 // Class to manage the Banking System
 class BankingSystem {
 private:
     vector<shared_ptr<BankAccount>> accounts;
-    int nextAccountNumber = 1;
+    int nextAccountNumber;
+
+    void loadAccounts() {
+        ifstream inFile("accounts.txt");
+        if (!inFile) {
+            nextAccountNumber = 1;
+            return; // No file exists, start fresh
+        }
+        string type;
+        while (inFile >> type) {
+            int accNum;
+            string accHolderName;
+            double bal, extra;
+            inFile >> accNum;
+            inFile.ignore(); // Ignore space
+            getline(inFile, accHolderName); // Account holder name might contain spaces
+            inFile >> bal >> extra;
+
+            if (type == "Savings") {
+                accounts.push_back(make_shared<SavingsAccount>(accNum, accHolderName, bal, extra));
+            } else if (type == "Current") {
+                accounts.push_back(make_shared<CurrentAccount>(accNum, accHolderName, bal, extra));
+            }
+        }
+        nextAccountNumber = accounts.empty() ? 1 : accounts.back()->getAccountNumber() + 1;
+    }
+
+    void saveAccounts() const {
+        ofstream outFile("accounts.txt");
+        for (const auto &account : accounts) {
+            account->save(outFile);
+        }
+    }
 
 public:
+    BankingSystem() {
+        loadAccounts(); // Load accounts from file at the start
+    }
+
+    ~BankingSystem() {
+        saveAccounts(); // Save accounts to file when program ends
+    }
+
     void createSavingsAccount(string accountHolderName, double initialDeposit, double interestRate) {
         auto newAccount = make_shared<SavingsAccount>(nextAccountNumber++, accountHolderName, initialDeposit, interestRate);
         accounts.push_back(newAccount);
         cout << "Savings account created successfully. Account Number: " << newAccount->getAccountNumber() << endl;
+        saveAccounts(); // Save after account creation
     }
 
     void createCurrentAccount(string accountHolderName, double initialDeposit, double overdraftLimit) {
         auto newAccount = make_shared<CurrentAccount>(nextAccountNumber++, accountHolderName, initialDeposit, overdraftLimit);
         accounts.push_back(newAccount);
         cout << "Current account created successfully. Account Number: " << newAccount->getAccountNumber() << endl;
+        saveAccounts(); // Save after account creation
     }
 
     void deposit(int accountNumber, double amount) {
         for (auto &account : accounts) {
             if (account->getAccountNumber() == accountNumber) {
                 account->deposit(amount);
+                saveAccounts(); // Save after deposit
                 return;
             }
         }
@@ -131,6 +196,7 @@ public:
         for (auto &account : accounts) {
             if (account->getAccountNumber() == accountNumber) {
                 account->withdraw(amount);
+                saveAccounts(); // Save after withdrawal
                 return;
             }
         }
